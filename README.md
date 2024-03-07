@@ -19,13 +19,13 @@ Ensure you have access to the necessary datasets for training and evaluation. Fo
 git clone https://github.com/Gautier29/BLIP2IDC.git
 ```
 
-Install the required Python packages:
+2. Install the required Python packages:
 ```
 cd BLIP2IDC
 pip install -r requirements.txt
 ```
 
-Usage
+### Usage
 To start training BLIP2IDC with synthetic data augmentation, follow these steps:
 
 Ensure you have your datasets properly set up in a directory accessible by the script.
