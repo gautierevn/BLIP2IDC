@@ -62,6 +62,33 @@ from IDC_datasets import ClevrChangeDataset, SpotTheDiff, ImageEditingRequest, C
 global logger
 from torchvision import transforms
 
+def train(model, dataloader, optimizer, device, args):
+    model.main_model.to(device)
+    model.main_model.train()
+    for inputs, labels, idi,idxs in tqdm(dataloader, total=len(dataloader),
+                                    bar_format='{l_bar}\033[31m{bar}\033[0m| {n_fmt}/{total_fmt} [{remaining}]'):
+
+        if args.dataset == "IER":
+            selected_labels = [min(label_set, key=len) for label_set in labels]
+        else:
+            selected_labels = [random.choice(label_set) for label_set in labels]
+            
+        if args.dataset == "emu":
+            selected_labels = labels
+            
+        input_ids = torch.tensor(
+            [model.tokenizer.encode(pr, add_special_tokens=True, max_length=60, padding='max_length',
+                                    truncation=True)
+             for pr in selected_labels]
+        ).cuda()
+        
+        outputs = model.main_model(input_ids=input_ids.cuda(),
+                                   pixel_values=inputs.cuda(),
+                                   labels=torch.clone(input_ids).cuda())
+        loss = outputs["loss"]
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
 def main_clevr(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -403,7 +430,62 @@ class BLIP2IDC(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
+def initialize_model_with_lora(args):
+    """
+    Initialize a VisionEncoderDecoder model and update it with LoRA layers based on given arguments.
 
+    Parameters:
+
+    Returns:
+        model (VisionEncoderDecoder): The updated VisionEncoderDecoder model.
+    """
+    print("Model initialized")
+    model = VisionEncoderDecoder(model_type=args.model_type)
+
+    modules = args.module_to_ft
+    target_modules = []
+
+    if 'QFormer' in modules:
+        qformer_layers = [f"qformer.encoder.layer.{x}.crossattention.attention.query" for x in range(0, 12)] + ["value",
+                                                                                                                "key"]
+        target_modules = qformer_layers
+
+    if 'ViT' in modules:
+        vit_layers = 'qkv'
+        target_modules.append(vit_layers)
+
+    if 'LLM' in modules:
+        target_modules.append("q_proj")
+        target_modules.append("k_proj")
+        target_modules.append("v_proj")
+    print(type(args.lora_rank), args.lora_rank)
+    print("lora_alpha for scaling : ", 1)
+    config = LoraConfig(
+        r=int(args.lora_rank), # 8 
+        lora_alpha=2 * int(args.lora_rank),  
+        lora_dropout=0.05,
+        bias="none",
+        target_modules=target_modules
+    )
+
+    model.main_model = get_peft_model(model.main_model, config)
+    model.main_model.print_trainable_parameters()
+
+    dir_adapter = args.ckpt
+    if dir_adapter is not None:
+        checkpoint_name = f"{dir_adapter}/adapter_model.bin"
+        adapters_weights = torch.load(checkpoint_name)
+        try:
+            cross_attention_layers = f"{dir_adapter}/custom_layers.pth"
+            adapters_weights_additionnal = torch.load(cross_attention_layers)
+            model.main_model.load_state_dict(adapters_weights_additionnal, strict=False)
+            print("loaded")
+        except Exception as e:
+            print(e)
+        print(f"peft weights loaded from {checkpoint_name}")
+        set_peft_model_state_dict(model.main_model, adapters_weights)
+    print("MODEL INITIALIZED")
+    return model
 
 
 def validation(model, dataloader, device, args):
@@ -417,11 +499,13 @@ def validation(model, dataloader, device, args):
             # Randomly select one label for each batch element
 
             if args.dataset == "IER":
-                selected_labels = [min(label_set, key=len) for label_set in labels]
-            else:
-                selected_labels = [random.choice(label_set) for label_set in labels]
+                selected_labels = [min(label_set, key=len) for label_set in labels] #we validate on the shortest label, as it is often the one with only one reference
+                
             if args.dataset == "emu":
                 selected_labels = labels
+            else:
+                selected_labels = [random.choice(label_set) for label_set in labels]
+
             # Tokenize and pad the selected labels
             input_ids = torch.tensor(
                 [model.tokenizer.encode(pr, add_special_tokens=True, max_length=60, padding='max_length',
@@ -502,62 +586,7 @@ def init_weights(m):
         nn.init.constant_(m.out_proj.bias, 0)
 
 
-def initialize_model_with_lora(args):
-    """
-    Initialize a VisionEncoderDecoder model and update it with LoRA layers based on given arguments.
 
-    Parameters:
-
-    Returns:
-        model (VisionEncoderDecoder): The updated VisionEncoderDecoder model.
-    """
-    print("Model initialized")
-    model = VisionEncoderDecoder(model_type=args.model_type)
-
-    modules = args.module_to_ft
-    target_modules = []
-
-    if 'QFormer' in modules:
-        qformer_layers = [f"qformer.encoder.layer.{x}.crossattention.attention.query" for x in range(0, 12)] + ["value",
-                                                                                                                "key"]
-        target_modules = qformer_layers
-
-    if 'ViT' in modules:
-        vit_layers = 'qkv'
-        target_modules.append(vit_layers)
-
-    if 'LLM' in modules:
-        target_modules.append("q_proj")
-        target_modules.append("k_proj")
-        target_modules.append("v_proj")
-    print(type(args.lora_rank), args.lora_rank)
-    print("lora_alpha for scaling : ", 1)
-    config = LoraConfig(
-        r=int(args.lora_rank), # 8 
-        lora_alpha=2 * int(args.lora_rank),  
-        lora_dropout=0.05,
-        bias="none",
-        target_modules=target_modules
-    )
-
-    model.main_model = get_peft_model(model.main_model, config)
-    model.main_model.print_trainable_parameters()
-
-    dir_adapter = args.ckpt
-    if dir_adapter is not None:
-        checkpoint_name = f"{dir_adapter}/adapter_model.bin"
-        adapters_weights = torch.load(checkpoint_name)
-        try:
-            cross_attention_layers = f"{dir_adapter}/custom_layers.pth"
-            adapters_weights_additionnal = torch.load(cross_attention_layers)
-            model.main_model.load_state_dict(adapters_weights_additionnal, strict=False)
-            print("loaded")
-        except Exception as e:
-            print(e)
-        print(f"peft weights loaded from {checkpoint_name}")
-        set_peft_model_state_dict(model.main_model, adapters_weights)
-    print("MODEL INITIALIZED")
-    return model
 
 def collate_fn(batch):
     # Find the maximum length string in the batch
