@@ -1680,64 +1680,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
     tokenizer = AutoTokenizer.from_pretrained("Salesforce/blip2-opt-2.7b")
-    # main_spot()
-    # print("doing mean sentence")
-    # main_mean_sentence()
-    # exit()
-    lora_influence = False
-    validation_augmentation = False
-    only_classic = False
-    # main_IER()
-    CIDEr_list = []
-    metrics_list = []
-    lora_ranks = args.lora_rank
-    if lora_influence:
-        print("COMPUTING LORA INFLUENCE")
-        if type(lora_ranks) == "list":
-            for i in range(len(lora_ranks)):
-                args.lora_rank = lora_ranks[i]
-                best_CIDEr, best_metrics = main_clevr(args)
-                CIDEr_list.append(best_CIDEr)
-                metrics_list.append(best_metrics)
-                with open(f'/xp_results/lora_influence/CIDEr_lora_{args.lora_rank}.txt', 'w') as f:
-                    for item in CIDEr_list:
-                        f.write("%s\n" % item)
 
-                # Save to JSON file
-                with open(f'/xp_results/lora_influence/metrics_list_lora_{args.lora_rank}.json', 'w') as f:
-                    json.dump(metrics_list, f)
-    print(f"val_aug : {validation_augmentation}, only classic augmentation : {only_classic}")
-    if validation_augmentation:
-        print("computing with classic and MB transforms")
-        for i in range(30):
-            print("ITERATION ", i)
-            best_CIDEr, best_metrics = main_clevr(args)
-            CIDEr_list.append(best_CIDEr)
-            metrics_list.append(best_metrics)
+    _, _ = main_clevr(args)
 
-            if only_classic:
-                with open(f'augmentation_result/classic_augment_emu.txt', 'w') as f:
-                    for item in CIDEr_list:
-                        f.write("%s\n" % item)
-
-                # Save to JSON file
-                with open(f'augmentation_result/classic_augment_emu.json', 'w') as f:
-                    json.dump(metrics_list, f)
-
-            else:
-                with open(f'augmentation_result/{args.little_name}.txt', 'w') as f:
-                    for item in CIDEr_list:
-                        f.write("%s\n" % item)
-
-                # Save to JSON file
-                with open(f'augmentation_result/{args.little_name}.json', 'w') as f:
-                    json.dump(metrics_list, f)
-    else:
-        #main_emu()
-        _, _ = main_clevr(args)
-        # main_mean_sentence()
-        # def profile_main_clevr():
-        #     _, _ = main_clevr(args)
-
-        # Run the profiler
-        # cProfile.run('profile_main_clevr()', 'profile_results')
