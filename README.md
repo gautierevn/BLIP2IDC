@@ -1,19 +1,24 @@
-#BLIP2IDC: Enhancing Image Difference Captioning with Synthetic Augmentation
-Abstract Summary
+# BLIP2IDC: Enhancing Image Difference Captioning with Synthetic Augmentation
+
+## Abstract Summary
 The evolution of generative models has significantly advanced the generation of image variations. The Image Difference Captioning (IDC) task, aimed at identifying differences between images, faces challenges with real-world images due to data scarcity and the complexity of capturing nuanced differences. We introduce BLIP2IDC, a framework that adapts image captioning models for IDC and uses synthetic augmentation to enrich IDC datasets, demonstrating superior performance on real-world datasets.
 
-#Getting Started
-##Prerequisites
-Ensure you have access to the necessary datasets for training and evaluation. For synthetic data augmentation and training with BLIP2IDC, the following are required:
+## Getting Started
 
-Python 3.8 or higher
-PyTorch 1.7 or higher
-Access to GPU for efficient training
-#Installation
-Clone the BLIP2IDC repository:
-bash
+### Prerequisites
+Ensure you have access to the necessary datasets for training and evaluation. For synthetic data augmentation and training with BLIP2IDC, the following are required:
+- Python 3.8 or higher
+- PyTorch 1.7 or higher
+- Access to GPU for efficient training
+
+### Installation
+1. Clone the BLIP2IDC repository:
+
+``` bash
 Copy code
 git clone https://github.com/Gautier29/BLIP2IDC.git
+```
+
 Install the required Python packages:
 bash
 Copy code
