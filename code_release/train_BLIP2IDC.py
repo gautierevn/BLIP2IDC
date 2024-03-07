@@ -110,6 +110,49 @@ def main_clevr(args):
         dataset_no_change = ClevrChangeDataset(img_dir=img_dir, modified_img_dir=nsc_dir,
                                                processor=model.processor,
                                                model_type="opt", data_pair="unchanged")
+        print("clevr dataset used")
+        if dataset_no_change != []:
+            concatenated_dataset = ConcatDataset([dataset_semantic_change, dataset_no_change])
+        else:
+            concatenated_dataset = dataset_semantic_change
+        with open("your_DIR/clevr_dataset/data/data/splits.json", "r") as f:
+            split_info = json.load(f)
+
+        train_idx = split_info['train']
+        train_nc_idx = [x + len(dataset_semantic_change) for x in train_idx]
+        train_data = Subset(concatenated_dataset, train_idx)
+        train_nc_data = Subset(concatenated_dataset, train_nc_idx)
+        train_dataset = ConcatDataset([train_data, train_nc_data])
+
+        train_all_idx = train_idx + train_nc_idx
+
+
+        # For validation data
+        val_idx = split_info['val']
+        val_nc_idx = [x + len(dataset_semantic_change) for x in val_idx]
+        val_data = Subset(concatenated_dataset, val_idx)
+        val_nc_data = Subset(concatenated_dataset, val_nc_idx)
+        val_dataset = ConcatDataset([val_data, val_nc_data])
+
+        test_idx = split_info['test']  # only accounting for the first dataset
+        test_nc_idx = [x + len(dataset_semantic_change) for x in test_idx]
+        test_data = Subset(concatenated_dataset, test_idx)
+        test_nc_data = Subset(concatenated_dataset, test_nc_idx)
+        test_dataset = ConcatDataset([test_data, test_nc_data])
+        test_all_idx = test_idx + test_nc_idx
+
+        sub_train_loader = DataLoader(subset_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=True,
+                                      num_workers=32,
+                                      pin_memory=True)
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=True,
+                                  num_workers=32,
+                                  pin_memory=True)
+        val_loader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                num_workers=32,
+                                pin_memory=True)
+        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                 num_workers=32,
+                                 pin_memory=True)
 
     if args.dataset == "spot":
         print("DATASET : SPOT")
@@ -164,50 +207,7 @@ def main_clevr(args):
                                  num_workers=32,
                                  pin_memory=True, drop_last=False)
 
-    if args.dataset == "clevr":
-        print("clevr dataset used")
-        if dataset_no_change != []:
-            concatenated_dataset = ConcatDataset([dataset_semantic_change, dataset_no_change])
-        else:
-            concatenated_dataset = dataset_semantic_change
-        with open("your_DIR/clevr_dataset/data/data/splits.json", "r") as f:
-            split_info = json.load(f)
-
-        train_idx = split_info['train']
-        train_nc_idx = [x + len(dataset_semantic_change) for x in train_idx]
-        train_data = Subset(concatenated_dataset, train_idx)
-        train_nc_data = Subset(concatenated_dataset, train_nc_idx)
-        train_dataset = ConcatDataset([train_data, train_nc_data])
-
-        train_all_idx = train_idx + train_nc_idx
-
-
-        # For validation data
-        val_idx = split_info['val']
-        val_nc_idx = [x + len(dataset_semantic_change) for x in val_idx]
-        val_data = Subset(concatenated_dataset, val_idx)
-        val_nc_data = Subset(concatenated_dataset, val_nc_idx)
-        val_dataset = ConcatDataset([val_data, val_nc_data])
-
-        test_idx = split_info['test']  # only accounting for the first dataset
-        test_nc_idx = [x + len(dataset_semantic_change) for x in test_idx]
-        test_data = Subset(concatenated_dataset, test_idx)
-        test_nc_data = Subset(concatenated_dataset, test_nc_idx)
-        test_dataset = ConcatDataset([test_data, test_nc_data])
-        test_all_idx = test_idx + test_nc_idx
-
-        sub_train_loader = DataLoader(subset_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=True,
-                                      num_workers=32,
-                                      pin_memory=True)
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=True,
-                                  num_workers=32,
-                                  pin_memory=True)
-        val_loader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                num_workers=32,
-                                pin_memory=True)
-        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                 num_workers=32,
-                                 pin_memory=True)
+    
        
     if args.dataset == "DC":
         clevr_dc_dataset = ClevrDC_Dataset(processor=model.processor)
