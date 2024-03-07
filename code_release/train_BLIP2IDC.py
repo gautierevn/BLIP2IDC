@@ -144,14 +144,21 @@ def main_clevr(args):
                                                   processor=model.processor,
                                                   label_file="your_DIR/IER_dataset/train.json",
                                                   concat_mode=concat_mode)
-
-
+        val_data = ImageEditingRequest(img_dir=img_dir, processor=model.processor,
+                                        label_file="your_DIR/IER_dataset/valid.json",
+                                                concat_mode=concat_mode)
+        
+        test_data = ImageEditingRequest(img_dir=img_dir, processor=model.processor,
+                                                label_file="your_DIR/IER_dataset/test.json",
+                                                concat_mode=concat_mode)
+        
         train_loader = DataLoader(train_data_original, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
                                   num_workers=32,
                                   pin_memory=True, drop_last=True)
-        test_data = ImageEditingRequest(img_dir=img_dir, processor=model.processor,
-                                        label_file="your_DIR/IER_dataset/test.json",
-                                        concat_mode=concat_mode)
+        
+        val_loader = DataLoader(val_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                  num_workers=32,
+                                  pin_memory=True, drop_last=True)
 
         test_loader = DataLoader(test_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
                                  num_workers=32,
