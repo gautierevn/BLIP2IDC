@@ -43,6 +43,7 @@ Run the training script with the appropriate parameters:
 ``` bash
 ./test_BLIP2IDC.sh
 ```
+
 ### Accessing the Syned Dataset
 Our Syned dataset, designed specifically for IDC, will be released upon publication. Samples can be found in the supplementary section of the paper.
 
