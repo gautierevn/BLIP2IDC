@@ -68,6 +68,355 @@ from collections import Counter
 global logger
 from torchvision import transforms
 
+
+def main_clevr(args):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = initialize_model_with_lora(args=args)
+    dataset_semantic_change = []
+    dataset_no_change = []
+    modules_to_save = []
+    best_score_path = "your_DIR/mono_magic/best_Cider_score.txt"
+
+    concat_mode = args.concat_mode
+    if args.dataset == "clevr":
+        img_dir = "your_DIR/clevr_dataset/data/data/images"
+        sc_dir = "your_DIR/clevr_dataset/data/data/sc_images"
+        nsc_dir = "your_DIR/clevr_dataset/data/data/nsc_images"
+
+        dataset_semantic_change = ClevrChangeDataset(img_dir=img_dir, modified_img_dir=sc_dir,
+                                                     processor=model.processor,
+                                                     model_type="opt", data_pair="modified")
+        dataset_no_change = ClevrChangeDataset(img_dir=img_dir, modified_img_dir=nsc_dir,
+                                               processor=model.processor,
+                                               model_type="opt", data_pair="unchanged")
+
+    if args.dataset == "spot":
+        print("DATASET : SPOT")
+        img_dir = "your_DIR/spot_the_diff/resized_images/original"
+        sc_dir = "your_DIR/spot_the_diff/resized_images/modified"
+
+        print("ARCHITECTURE : mono")
+
+        train_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
+                                label_file="your_DIR/spot_the_diff/reformat_train.json")
+        val_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
+                              label_file="your_DIR/spot_the_diff/reformat_val.json")
+        test_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
+                               label_file="your_DIR/spot_the_diff/reformat_test.json")
+
+        train_loader = DataLoader(train_set, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                  num_workers=32,
+                                  pin_memory=True, drop_last=True)
+        val_loader = DataLoader(val_set, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                num_workers=32,
+                                pin_memory=True, drop_last=True)
+        test_loader = DataLoader(test_set, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                 num_workers=32,
+                                 pin_memory=True, drop_last=True)
+
+       
+    if args.dataset == "IER":
+
+        img_dir = "your_DIR/IER_dataset/images"
+        img_dir_synthetic = "your_DIR/IER_filtered_top_two_above_threshold_0.3"
+
+        train_data_original = ImageEditingRequest(img_dir=img_dir, img_dir_synthetic=img_dir,
+                                                  processor=model.processor,
+                                                  label_file="your_DIR/IER_dataset/train.json",
+                                                  concat_mode=concat_mode)
+
+        train_data_synthetic = ImageEditingRequest(img_dir=img_dir, img_dir_synthetic=img_dir_synthetic,
+                                                   processor=model.processor,
+                                                   label_file="your_DIR/IER_filtered_top_two_above_threshold_0.3/synthetic_train.json",
+                                                   concat_mode=concat_mode)
+        combined_train_data = ConcatDataset([train_data_original, train_data_synthetic])
+
+        train_loader = DataLoader(combined_train_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                  num_workers=32,
+                                  pin_memory=True, drop_last=True)
+        test_data = ImageEditingRequest(img_dir=img_dir, img_dir_synthetic=None, processor=model.processor,
+                                        label_file="your_DIR/IER_dataset/test.json",
+                                        concat_mode=concat_mode)
+
+        test_loader = DataLoader(test_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                 num_workers=32,
+                                 pin_memory=True, drop_last=False)
+
+    if args.dataset == "clevr":
+        print("clevr dataset used")
+        if dataset_no_change != []:
+            concatenated_dataset = ConcatDataset([dataset_semantic_change, dataset_no_change])
+        else:
+            concatenated_dataset = dataset_semantic_change
+        with open("your_DIR/clevr_dataset/data/data/splits.json", "r") as f:
+            split_info = json.load(f)
+
+        train_idx = split_info['train']
+        train_nc_idx = [x + len(dataset_semantic_change) for x in train_idx]
+        train_data = Subset(concatenated_dataset, train_idx)
+        train_nc_data = Subset(concatenated_dataset, train_nc_idx)
+        train_dataset = ConcatDataset([train_data, train_nc_data])
+
+        train_all_idx = train_idx + train_nc_idx
+
+        five_percent_length = int(0.25 * len(train_dataset))
+        indices = torch.randperm(len(train_dataset))[:five_percent_length]
+        # indices = [x for x in range(len(train_dataset))][:five_percent_length]
+        # Create a new Subset using the random indices
+        subset_dataset = Subset(train_dataset, indices)
+
+        # For validation data
+        val_idx = split_info['val']
+        val_nc_idx = [x + len(dataset_semantic_change) for x in val_idx]
+        val_data = Subset(concatenated_dataset, val_idx)
+        val_nc_data = Subset(concatenated_dataset, val_nc_idx)
+        val_dataset = ConcatDataset([val_data, val_nc_data])
+
+        test_idx = split_info['test']  # only accounting for the first dataset
+        test_nc_idx = [x + len(dataset_semantic_change) for x in test_idx]
+        test_data = Subset(concatenated_dataset, test_idx)
+        test_nc_data = Subset(concatenated_dataset, test_nc_idx)
+        test_dataset = ConcatDataset([test_data, test_nc_data])
+        test_all_idx = test_idx + test_nc_idx
+
+        sub_train_loader = DataLoader(subset_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=True,
+                                      num_workers=32,
+                                      pin_memory=True)
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=True,
+                                  num_workers=32,
+                                  pin_memory=True)
+        val_loader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                num_workers=32,
+                                pin_memory=True)
+        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                 num_workers=32,
+                                 pin_memory=True)
+       
+    if args.dataset == "DC":
+        clevr_dc_dataset = ClevrDC_Dataset(processor=model.processor)
+
+        split_json = "your_DIR/BIG_storage/clevr_dc/split_dc.json"
+        with open(split_json, 'r') as file:
+            split_info = json.load(file)
+
+        train_idx = split_info['train']
+        train_data = Subset(clevr_dc_dataset, train_idx)
+
+        test_idx = split_info['test']#[0:320]
+        test_data = Subset(clevr_dc_dataset, test_idx)
+
+        train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=custom_collate_clevr_dc, shuffle=True,
+                                num_workers=32,
+                                pin_memory=True, drop_last=True)
+        test_loader = DataLoader(test_data, batch_size=args.batch_size, collate_fn=custom_collate_clevr_dc, shuffle=False,
+                                num_workers=32,
+                                pin_memory=True, drop_last=True)
+    if args.dataset == "magic":
+        # On this section we finetune on MagicBrsuh to evaluate on spot the diff
+        img_dir = "your_DIR/IER_dataset/images"
+        dataset = load_dataset("osunlp/MagicBrush")
+
+
+        train_data = MagicDataset(dataset["train"], model.processor, concat_mode=concat_mode)
+        val_data = MagicDataset(dataset["dev"], model.processor, concat_mode=concat_mode)
+
+        train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                  num_workers=32,
+                                  pin_memory=True, drop_last=True)
+        val_loader = DataLoader(val_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
+                                num_workers=32,
+                                pin_memory=True, drop_last=True)
+
+    if args.dataset == "emu":
+        def custom_collate_emu(batch, processor=model.processor):
+
+            # Initialize lists to store processed data
+            double_images = []
+            tasks = []
+            instructions = []
+            idxs = []
+            for sample in batch:
+                # Load the PNG image using PIL (Pillow)
+                image = sample['image'].convert('RGB')
+                edited_image = sample['edited_image'].convert('RGB')
+                # Get the size of the original image
+                original_size = edited_image.size
+                new_image = image.resize(original_size, Image.BICUBIC)
+
+                double_img = Image.new('RGB', (new_image.width, new_image.height + edited_image.height))
+                double_img.paste(new_image, (0, 0))
+                double_img.paste(edited_image, (0, new_image.height))
+
+                double_img = composed_transforms(double_img)
+                double_img.save("double_image.jpg")
+                task_prompt = "Describe the differences between the two images:"
+                inputs = processor(images=double_img, text=task_prompt, return_tensors="pt")["pixel_values"].squeeze(
+                    0).half()
+                double_images.append(inputs)
+
+                idxs.append(sample["idx"])
+                tasks.append(sample['task'])
+                instructions.append(sample['instruction'])
+
+            return torch.stack(double_images), instructions, tasks, idxs
+
+        dataset = load_dataset("facebook/emu_edit_test_set_generations",
+                               cache_dir="your_DIR/.cache/huggingface/datasets")
+        data = dataset["validation"]
+        og_train_data = []
+        og_val_data = []
+        
+        split_file="your_DIR/emu_dataset/splits.json"
+        with open(split_file,"r") as file :
+            split_data = json.load(file)
+        
+        for x in data: 
+            if x["idx"] in split_data["train"]:
+                og_train_data.append(x)
+            if x["idx"] in split_data["validation"]:
+                og_val_data.append(x)
+        test_data = dataset["test"]
+        train_data = EmuDataset(processor=model.processor,split="train")
+        val_data = EmuDataset(processor=model.processor,split="validation")
+        select_rate = args.select_rate
+        #sampler = FlexibleSampler(dataset_emu, select_rate=select_rate)
+        
+        if args.synth_pretraining == "True": #means pretraining has been done on customized synthetic data before
+            print("use ckpt : ", args.synth_pretraining)
+
+            # Create a data loader for the combined dataset
+            train_loader = DataLoader(og_train_data,batch_size=args.batch_size, collate_fn=custom_collate_emu,
+                                      shuffle=True, num_workers=32, pin_memory=True, drop_last=True)
+            val_loader   = DataLoader(og_val_data,batch_size=args.batch_size, collate_fn=custom_collate_emu,
+                                      shuffle=True, num_workers=32, pin_memory=True, drop_last=True)
+        else: # you train on your synthetic augmentation data first
+            # Create a data loader for the combined dataset
+            train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=custom_collate_emu,
+                                       num_workers=32, pin_memory=True, drop_last=True)
+            val_loader = DataLoader(og_val_data, batch_size=args.batch_size, collate_fn=custom_collate_emu,
+                                       num_workers=32, pin_memory=True, drop_last=True)#WE USE THE SAME VAL SPLIT AS EMU OG
+            # train_loader = DataLoader(combined_dataset, batch_size=16, collate_fn=custom_collate_emu,
+            #                           shuffle=True, num_workers=32, pin_memory=True, drop_last=True)
+        test_loader = DataLoader(test_data, batch_size=args.batch_size, collate_fn=custom_collate_emu, shuffle=False,
+                                 num_workers=32, pin_memory=True, drop_last=True)
+
+        # for testing the performances on each data type
+
+        task_subsets = defaultdict(list)
+
+        # Iterate through the dataset and populate subsets
+        for item in dataset['test']:
+            task_subsets[item['task']].append(item)
+
+        # Function to create a DataLoader for a given subset
+        def create_dataloader_for_task(task_data, collate_fn=custom_collate_emu, batch_size=32):
+            return DataLoader(task_data, batch_size=batch_size, collate_fn=collate_fn,
+                              shuffle=False, num_workers=32, pin_memory=True, drop_last=True)
+
+        # Create a DataLoader for each task
+        task_dataloaders = {task: create_dataloader_for_task(data, custom_collate_emu) for task, data in
+                            task_subsets.items()}
+
+    optimizer = optim.AdamW(model.main_model.parameters(), lr=args.lr)
+
+    num_epochs = 100  # max_epochs
+
+    # Initialize variables for early stopping
+    best_score = 0.00001
+    best_output_model_file = "None"
+    early_stop = 0
+    epochs = 0
+    best_val_loss = 100000000000.0
+    logger = get_logger("results/log.txt")
+    best_metrics = []
+    try:
+        with open("your_DIR/all_run_scores.json", 'r') as file:
+            run_scores = json.load(file)
+    except FileNotFoundError:
+        run_scores = {}
+        with open("your_DIR/all_run_scores.json", 'w') as file:
+            json.dump(run_scores, file, indent=4)
+    if args.little_name not in run_scores.keys():
+        run_scores[args.little_name] = {}
+        run_scores[args.little_name]["best_cider_score"] = 0.0
+        run_scores[args.little_name][
+            "path"] = f"your_DIR/{args.save_dir}/{args.little_name}_{args.lora_rank}.bin.opt"
+
+    if args.architecture == "mono":
+        best_loss = 10.0
+        if args.TRAIN == "True":
+            print("Beginning training with validation")
+            val_loss = []
+            for epoch in tqdm(range(num_epochs), total=num_epochs, desc=f'epoch {epochs}'):
+                train(model, train_loader, optimizer, device, args)
+
+                if args.dataset == "magic":
+                    val_loss = 1
+                    CIDEr, metrics = eval_epoch(model.main_model, dataloader=val_loader, device=device, epoch=epoch,
+                                                logger=logger,
+                                                processor=model.processor, args=args)
+                else:
+                    avg_loss = validation(model, dataloader=val_loader, device=device, args=args)
+                    val_loss.append(avg_loss)
+                print(val_loss)
+                
+           
+                if avg_loss < best_loss:
+                    early_stop = 0
+                    best_loss = avg_loss
+                    output_model_file = save_model(epoch, model, save_path=run_scores[args.little_name]["path"],
+                                                   logger=logger)
+                    
+                    best_output_model_file = output_model_file
+                    
+                    with open("your_DIR/all_run_scores.json", 'w') as file:
+                        json.dump(run_scores, file, indent=4)
+                    
+                    logger.info(
+                        "The best model is: {}".format(best_output_model_file))
+                else : 
+                    early_stop += 1
+                   
+
+                if early_stop == 10:
+                    break        
+
+        if args.TEST == "True":
+            if args.TRAIN == "True":
+                args.ckpt = run_scores[args.little_name]["path"]
+                print(args.ckpt)
+            model = initialize_model_with_lora(args=args)
+            if args.dataset in ["emu","IER"] :
+                # print("testing task emu")
+                # CIDEr, task_metrics = eval_emu_mono(model.main_model, task_dataloaders=task_dataloaders, device=device,
+                #                                processor=model.processor,
+                #                                args=args)  # , mean_sentence="there is a person walking in the parking lot")
+                # logger.info(f"test scores are {task_metrics}, best CIDEr is {CIDEr}")
+                print("TESTING overall Emu")
+                CIDEr, metrics = eval_epoch(model.main_model, dataloader=test_loader, device=device, epoch="eval",
+                                            logger=logger,
+                                            processor=model.processor,
+                                            args=args)  # , mean_sentence="there is a person walking in the parking lot")
+                run_scores[args.little_name]["best_cider_score"] = CIDEr
+                print(metrics)
+
+                with open("your_DIR/all_run_scores.json", 'w') as file:
+                    json.dump(run_scores, file, indent=4)
+                
+                logger.info(f"test scores are {metrics}, best CIDEr is {CIDEr}")
+                print("Tested")
+            
+        if args.TEST == "True":
+            print("TESTING")
+            CIDEr, metrics = eval_epoch(model.main_model, dataloader=test_loader, device=device, epoch="eval",
+                                        logger=logger,
+                                        processor=model.processor, args=args,
+                                        mean_sentence="the scene remains the same")
+            logger.info(f"test scores are {metrics}, best CIDEr is {CIDEr}")
+            print("Tested")
+    print("END TRAINING")
+    return best_score, best_metrics
+
 composed_transforms = transforms.Compose([
     transforms.GaussianBlur(3, sigma=(0.1, 0.5))
     # transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
@@ -1269,353 +1618,7 @@ def initialize_model_with_lora(args):
     return model
 
 
-def main_clevr(args):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = initialize_model_with_lora(args=args)
-    dataset_semantic_change = []
-    dataset_no_change = []
-    modules_to_save = []
-    best_score_path = "your_DIR/mono_magic/best_Cider_score.txt"
 
-    concat_mode = args.concat_mode
-    if args.dataset == "clevr":
-        img_dir = "your_DIR/clevr_dataset/data/data/images"
-        sc_dir = "your_DIR/clevr_dataset/data/data/sc_images"
-        nsc_dir = "your_DIR/clevr_dataset/data/data/nsc_images"
-
-        dataset_semantic_change = ClevrChangeDataset(img_dir=img_dir, modified_img_dir=sc_dir,
-                                                     processor=model.processor,
-                                                     model_type="opt", data_pair="modified")
-        dataset_no_change = ClevrChangeDataset(img_dir=img_dir, modified_img_dir=nsc_dir,
-                                               processor=model.processor,
-                                               model_type="opt", data_pair="unchanged")
-
-    if args.dataset == "spot":
-        print("DATASET : SPOT")
-        img_dir = "your_DIR/spot_the_diff/resized_images/original"
-        sc_dir = "your_DIR/spot_the_diff/resized_images/modified"
-
-        print("ARCHITECTURE : mono")
-
-        train_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
-                                label_file="your_DIR/spot_the_diff/reformat_train.json")
-        val_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
-                              label_file="your_DIR/spot_the_diff/reformat_val.json")
-        test_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
-                               label_file="your_DIR/spot_the_diff/reformat_test.json")
-
-        train_loader = DataLoader(train_set, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                  num_workers=32,
-                                  pin_memory=True, drop_last=True)
-        val_loader = DataLoader(val_set, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                num_workers=32,
-                                pin_memory=True, drop_last=True)
-        test_loader = DataLoader(test_set, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                 num_workers=32,
-                                 pin_memory=True, drop_last=True)
-
-       
-    if args.dataset == "IER":
-
-        img_dir = "your_DIR/IER_dataset/images"
-        img_dir_synthetic = "your_DIR/IER_filtered_top_two_above_threshold_0.3"
-
-        train_data_original = ImageEditingRequest(img_dir=img_dir, img_dir_synthetic=img_dir,
-                                                  processor=model.processor,
-                                                  label_file="your_DIR/IER_dataset/train.json",
-                                                  concat_mode=concat_mode)
-
-        train_data_synthetic = ImageEditingRequest(img_dir=img_dir, img_dir_synthetic=img_dir_synthetic,
-                                                   processor=model.processor,
-                                                   label_file="your_DIR/IER_filtered_top_two_above_threshold_0.3/synthetic_train.json",
-                                                   concat_mode=concat_mode)
-        combined_train_data = ConcatDataset([train_data_original, train_data_synthetic])
-
-        train_loader = DataLoader(combined_train_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                  num_workers=32,
-                                  pin_memory=True, drop_last=True)
-        test_data = ImageEditingRequest(img_dir=img_dir, img_dir_synthetic=None, processor=model.processor,
-                                        label_file="your_DIR/IER_dataset/test.json",
-                                        concat_mode=concat_mode)
-
-        test_loader = DataLoader(test_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                 num_workers=32,
-                                 pin_memory=True, drop_last=False)
-
-    if args.dataset == "clevr":
-        print("clevr dataset used")
-        if dataset_no_change != []:
-            concatenated_dataset = ConcatDataset([dataset_semantic_change, dataset_no_change])
-        else:
-            concatenated_dataset = dataset_semantic_change
-        with open("your_DIR/clevr_dataset/data/data/splits.json", "r") as f:
-            split_info = json.load(f)
-
-        train_idx = split_info['train']
-        train_nc_idx = [x + len(dataset_semantic_change) for x in train_idx]
-        train_data = Subset(concatenated_dataset, train_idx)
-        train_nc_data = Subset(concatenated_dataset, train_nc_idx)
-        train_dataset = ConcatDataset([train_data, train_nc_data])
-
-        train_all_idx = train_idx + train_nc_idx
-
-        five_percent_length = int(0.25 * len(train_dataset))
-        indices = torch.randperm(len(train_dataset))[:five_percent_length]
-        # indices = [x for x in range(len(train_dataset))][:five_percent_length]
-        # Create a new Subset using the random indices
-        subset_dataset = Subset(train_dataset, indices)
-
-        # For validation data
-        val_idx = split_info['val']
-        val_nc_idx = [x + len(dataset_semantic_change) for x in val_idx]
-        val_data = Subset(concatenated_dataset, val_idx)
-        val_nc_data = Subset(concatenated_dataset, val_nc_idx)
-        val_dataset = ConcatDataset([val_data, val_nc_data])
-
-        test_idx = split_info['test']  # only accounting for the first dataset
-        test_nc_idx = [x + len(dataset_semantic_change) for x in test_idx]
-        test_data = Subset(concatenated_dataset, test_idx)
-        test_nc_data = Subset(concatenated_dataset, test_nc_idx)
-        test_dataset = ConcatDataset([test_data, test_nc_data])
-        test_all_idx = test_idx + test_nc_idx
-
-        sub_train_loader = DataLoader(subset_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=True,
-                                      num_workers=32,
-                                      pin_memory=True)
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=True,
-                                  num_workers=32,
-                                  pin_memory=True)
-        val_loader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                num_workers=32,
-                                pin_memory=True)
-        test_loader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                 num_workers=32,
-                                 pin_memory=True)
-       
-    if args.dataset == "DC":
-        clevr_dc_dataset = ClevrDC_Dataset(processor=model.processor)
-
-        split_json = "your_DIR/BIG_storage/clevr_dc/split_dc.json"
-        with open(split_json, 'r') as file:
-            split_info = json.load(file)
-
-        train_idx = split_info['train']
-        train_data = Subset(clevr_dc_dataset, train_idx)
-
-        test_idx = split_info['test']#[0:320]
-        test_data = Subset(clevr_dc_dataset, test_idx)
-
-        train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=custom_collate_clevr_dc, shuffle=True,
-                                num_workers=32,
-                                pin_memory=True, drop_last=True)
-        test_loader = DataLoader(test_data, batch_size=args.batch_size, collate_fn=custom_collate_clevr_dc, shuffle=False,
-                                num_workers=32,
-                                pin_memory=True, drop_last=True)
-    if args.dataset == "magic":
-        # On this section we finetune on MagicBrsuh to evaluate on spot the diff
-        img_dir = "your_DIR/IER_dataset/images"
-        dataset = load_dataset("osunlp/MagicBrush")
-
-
-        train_data = MagicDataset(dataset["train"], model.processor, concat_mode=concat_mode)
-        val_data = MagicDataset(dataset["dev"], model.processor, concat_mode=concat_mode)
-
-        train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                  num_workers=32,
-                                  pin_memory=True, drop_last=True)
-        val_loader = DataLoader(val_data, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
-                                num_workers=32,
-                                pin_memory=True, drop_last=True)
-
-    if args.dataset == "emu":
-        def custom_collate_emu(batch, processor=model.processor):
-
-            # Initialize lists to store processed data
-            double_images = []
-            tasks = []
-            instructions = []
-            idxs = []
-            for sample in batch:
-                # Load the PNG image using PIL (Pillow)
-                image = sample['image'].convert('RGB')
-                edited_image = sample['edited_image'].convert('RGB')
-                # Get the size of the original image
-                original_size = edited_image.size
-                new_image = image.resize(original_size, Image.BICUBIC)
-
-                double_img = Image.new('RGB', (new_image.width, new_image.height + edited_image.height))
-                double_img.paste(new_image, (0, 0))
-                double_img.paste(edited_image, (0, new_image.height))
-
-                double_img = composed_transforms(double_img)
-                double_img.save("double_image.jpg")
-                task_prompt = "Describe the differences between the two images:"
-                inputs = processor(images=double_img, text=task_prompt, return_tensors="pt")["pixel_values"].squeeze(
-                    0).half()
-                double_images.append(inputs)
-
-                idxs.append(sample["idx"])
-                tasks.append(sample['task'])
-                instructions.append(sample['instruction'])
-
-            return torch.stack(double_images), instructions, tasks, idxs
-
-        dataset = load_dataset("facebook/emu_edit_test_set_generations",
-                               cache_dir="your_DIR/.cache/huggingface/datasets")
-        data = dataset["validation"]
-        og_train_data = []
-        og_val_data = []
-        
-        split_file="your_DIR/emu_dataset/splits.json"
-        with open(split_file,"r") as file :
-            split_data = json.load(file)
-        
-        for x in data: 
-            if x["idx"] in split_data["train"]:
-                og_train_data.append(x)
-            if x["idx"] in split_data["validation"]:
-                og_val_data.append(x)
-        test_data = dataset["test"]
-        train_data = EmuDataset(processor=model.processor,split="train")
-        val_data = EmuDataset(processor=model.processor,split="validation")
-        select_rate = args.select_rate
-        #sampler = FlexibleSampler(dataset_emu, select_rate=select_rate)
-        
-        if args.synth_pretraining == "True": #means pretraining has been done on customized synthetic data before
-            print("use ckpt : ", args.synth_pretraining)
-
-            # Create a data loader for the combined dataset
-            train_loader = DataLoader(og_train_data,batch_size=args.batch_size, collate_fn=custom_collate_emu,
-                                      shuffle=True, num_workers=32, pin_memory=True, drop_last=True)
-            val_loader   = DataLoader(og_val_data,batch_size=args.batch_size, collate_fn=custom_collate_emu,
-                                      shuffle=True, num_workers=32, pin_memory=True, drop_last=True)
-        else: # you train on your synthetic augmentation data first
-            # Create a data loader for the combined dataset
-            train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=custom_collate_emu,
-                                       num_workers=32, pin_memory=True, drop_last=True)
-            val_loader = DataLoader(og_val_data, batch_size=args.batch_size, collate_fn=custom_collate_emu,
-                                       num_workers=32, pin_memory=True, drop_last=True)#WE USE THE SAME VAL SPLIT AS EMU OG
-            # train_loader = DataLoader(combined_dataset, batch_size=16, collate_fn=custom_collate_emu,
-            #                           shuffle=True, num_workers=32, pin_memory=True, drop_last=True)
-        test_loader = DataLoader(test_data, batch_size=args.batch_size, collate_fn=custom_collate_emu, shuffle=False,
-                                 num_workers=32, pin_memory=True, drop_last=True)
-
-        # for testing the performances on each data type
-
-        task_subsets = defaultdict(list)
-
-        # Iterate through the dataset and populate subsets
-        for item in dataset['test']:
-            task_subsets[item['task']].append(item)
-
-        # Function to create a DataLoader for a given subset
-        def create_dataloader_for_task(task_data, collate_fn=custom_collate_emu, batch_size=32):
-            return DataLoader(task_data, batch_size=batch_size, collate_fn=collate_fn,
-                              shuffle=False, num_workers=32, pin_memory=True, drop_last=True)
-
-        # Create a DataLoader for each task
-        task_dataloaders = {task: create_dataloader_for_task(data, custom_collate_emu) for task, data in
-                            task_subsets.items()}
-
-    optimizer = optim.AdamW(model.main_model.parameters(), lr=args.lr)
-
-    num_epochs = 100  # max_epochs
-
-    # Initialize variables for early stopping
-    best_score = 0.00001
-    best_output_model_file = "None"
-    early_stop = 0
-    epochs = 0
-    best_val_loss = 100000000000.0
-    logger = get_logger("results/log.txt")
-    best_metrics = []
-    try:
-        with open("your_DIR/all_run_scores.json", 'r') as file:
-            run_scores = json.load(file)
-    except FileNotFoundError:
-        run_scores = {}
-        with open("your_DIR/all_run_scores.json", 'w') as file:
-            json.dump(run_scores, file, indent=4)
-    if args.little_name not in run_scores.keys():
-        run_scores[args.little_name] = {}
-        run_scores[args.little_name]["best_cider_score"] = 0.0
-        run_scores[args.little_name][
-            "path"] = f"your_DIR/{args.save_dir}/{args.little_name}_{args.lora_rank}.bin.opt"
-
-    if args.architecture == "mono":
-        best_loss = 10.0
-        if args.TRAIN == "True":
-            print("Beginning training with validation")
-            val_loss = []
-            for epoch in tqdm(range(num_epochs), total=num_epochs, desc=f'epoch {epochs}'):
-                train(model, train_loader, optimizer, device, args)
-
-                if args.dataset == "magic":
-                    val_loss = 1
-                    CIDEr, metrics = eval_epoch(model.main_model, dataloader=val_loader, device=device, epoch=epoch,
-                                                logger=logger,
-                                                processor=model.processor, args=args)
-                else:
-                    avg_loss = validation(model, dataloader=val_loader, device=device, args=args)
-                    val_loss.append(avg_loss)
-                print(val_loss)
-                
-           
-                if avg_loss < best_loss:
-                    early_stop = 0
-                    best_loss = avg_loss
-                    output_model_file = save_model(epoch, model, save_path=run_scores[args.little_name]["path"],
-                                                   logger=logger)
-                    
-                    best_output_model_file = output_model_file
-                    
-                    with open("your_DIR/all_run_scores.json", 'w') as file:
-                        json.dump(run_scores, file, indent=4)
-                    
-                    logger.info(
-                        "The best model is: {}".format(best_output_model_file))
-                else : 
-                    early_stop += 1
-                   
-
-                if early_stop == 10:
-                    break        
-
-        if args.TEST == "True":
-            if args.TRAIN == "True":
-                args.ckpt = run_scores[args.little_name]["path"]
-                print(args.ckpt)
-            model = initialize_model_with_lora(args=args)
-            if args.dataset in ["emu","IER"] :
-                # print("testing task emu")
-                # CIDEr, task_metrics = eval_emu_mono(model.main_model, task_dataloaders=task_dataloaders, device=device,
-                #                                processor=model.processor,
-                #                                args=args)  # , mean_sentence="there is a person walking in the parking lot")
-                # logger.info(f"test scores are {task_metrics}, best CIDEr is {CIDEr}")
-                print("TESTING overall Emu")
-                CIDEr, metrics = eval_epoch(model.main_model, dataloader=test_loader, device=device, epoch="eval",
-                                            logger=logger,
-                                            processor=model.processor,
-                                            args=args)  # , mean_sentence="there is a person walking in the parking lot")
-                run_scores[args.little_name]["best_cider_score"] = CIDEr
-                print(metrics)
-
-                with open("your_DIR/all_run_scores.json", 'w') as file:
-                    json.dump(run_scores, file, indent=4)
-                
-                logger.info(f"test scores are {metrics}, best CIDEr is {CIDEr}")
-                print("Tested")
-            
-        if args.TEST == "True":
-            print("TESTING")
-            CIDEr, metrics = eval_epoch(model.main_model, dataloader=test_loader, device=device, epoch="eval",
-                                        logger=logger,
-                                        processor=model.processor, args=args,
-                                        mean_sentence="the scene remains the same")
-            logger.info(f"test scores are {metrics}, best CIDEr is {CIDEr}")
-            print("Tested")
-    print("END TRAINING")
-    return best_score, best_metrics
 
 
 
