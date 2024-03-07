@@ -429,7 +429,7 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
                 if mean_sentence != None:
                     all_result_lists.append({"caption": mean_sentence, "image_id": id})
                 else:
-                    if args.dataset == "IER" or args.augmentation == "IER" or args.dataset == "magic" or args.dataset == "emu" or args.dataset == "DC":
+                    if args.dataset == "IER" or args.augmentation == "IER" or args.dataset == "emu" or args.dataset == "DC":
                         all_result_lists.append(generated_text[c])
                         if args.dataset !="emu":                             
                             gt_list.append(labels[c])

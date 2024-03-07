@@ -69,7 +69,7 @@ def main_clevr(args):
     dataset_semantic_change = []
     dataset_no_change = []
     modules_to_save = []
-    best_score_path = "your_DIR/mono_magic/best_Cider_score.txt"
+    best_score_path = "your_DIR/best_Cider_score.txt"
 
     concat_mode = args.concat_mode
     if args.dataset == "clevr":
@@ -316,15 +316,9 @@ def main_clevr(args):
         for epoch in tqdm(range(num_epochs), total=num_epochs, desc=f'epoch {epochs}'):
             train(model, train_loader, optimizer, device, args)
 
-            if args.dataset == "magic":
-                val_loss = 1
-                CIDEr, metrics = eval_epoch(model.main_model, dataloader=val_loader, device=device, epoch=epoch,
-                                            logger=logger,
-                                            processor=model.processor, args=args)
-            else:
-                avg_loss = validation(model, dataloader=val_loader, device=device, args=args)
-                val_loss.append(avg_loss)
-            print(val_loss)
+            avg_loss = validation(model, dataloader=val_loader, device=device, args=args)
+            val_loss.append(avg_loss)
+            print("Validation loss : ", val_loss)
             
        
             if avg_loss < best_loss:
@@ -426,7 +420,7 @@ def validation(model, dataloader, device, args):
                 selected_labels = [min(label_set, key=len) for label_set in labels]
             else:
                 selected_labels = [random.choice(label_set) for label_set in labels]
-            if args.dataset == "magic" or args.dataset == "emu":
+            if args.dataset == "emu":
                 selected_labels = labels
             # Tokenize and pad the selected labels
             input_ids = torch.tensor(
