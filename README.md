@@ -36,7 +36,12 @@ Run the training script with the appropriate parameters:
 ```
 
 This script will automatically use the synthetic augmentation techniques described in our paper to enhance the performance of the BLIP2IDC model.
+Then, for evaluation, run the eval script : 
+Run the training script with the appropriate parameters:
 
+``` bash
+./test_BLIP2IDC.sh
+```
 ### Accessing the Syned Dataset
 Our Syned dataset, designed specifically for IDC, will be released upon publication. Samples can be found in the supplementary section of the paper.
 
