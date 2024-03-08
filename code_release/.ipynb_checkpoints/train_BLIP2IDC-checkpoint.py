@@ -278,8 +278,8 @@ def main_clevr(args):
             if x["idx"] in split_data["validation"]:
                 og_val_data.append(x)
         test_data = dataset["test"]
-        train_data = EmuDataset(processor=model.processor,split="train")
-        val_data = EmuDataset(processor=model.processor,split="validation")
+        train_data = SynedDataset(processor=model.processor,split="train")
+        val_data = SynedDataset(processor=model.processor,split="validation")
         select_rate = args.select_rate
         #sampler = FlexibleSampler(dataset_emu, select_rate=select_rate)
         
