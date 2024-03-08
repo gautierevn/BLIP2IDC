@@ -229,7 +229,7 @@ def main_clevr(args):
                                 num_workers=32,
                                 pin_memory=True, drop_last=True)
 
-    if args.dataset == "emu":
+    if args.dataset in ["emu","syned"]:
         def custom_collate_emu(batch, processor=model.processor):
 
             # Initialize lists to store processed data
@@ -250,7 +250,7 @@ def main_clevr(args):
                 double_img.paste(edited_image, (0, new_image.height))
 
                 double_img = composed_transforms(double_img)
-                double_img.save("double_image.jpg")
+                # double_img.save("double_image.jpg") #for control purpose
                 task_prompt = "Describe the differences between the two images:"
                 inputs = processor(images=double_img, text=task_prompt, return_tensors="pt")["pixel_values"].squeeze(
                     0).half()
@@ -280,8 +280,7 @@ def main_clevr(args):
         test_data = dataset["test"]
         train_data = SynedDataset(processor=model.processor,split="train")
         val_data = SynedDataset(processor=model.processor,split="validation")
-        select_rate = args.select_rate
-        #sampler = FlexibleSampler(dataset_emu, select_rate=select_rate)
+
         
         if args.synth_pretraining == "True": #means pretraining has been done on customized synthetic data before
             print("use ckpt : ", args.synth_pretraining)

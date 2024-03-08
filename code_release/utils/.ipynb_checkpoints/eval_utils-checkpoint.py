@@ -396,7 +396,7 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
         emu_gt_test = json.load(json_file)
         
     original_gt={}
-    with open("emu_dataset/instructions_with_idx_test_split.txt", 'r') as file:
+    with open("Syned/instructions_with_idx_test_split.txt", 'r') as file:
         for line in file:
             # Remove any trailing newlines or spaces
             idx, instruction = line.strip().split("<INSTRUCT>")
@@ -495,11 +495,11 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
 def eval_emu_mono(model, task_dataloaders, device, processor, args, mean_sentence=None):
     model = model.to(device)
     model.eval()
-    with open("your_DIR/emu_dataset/gt_augmented_test_clean.json", 'r') as json_file:
+    with open("your_DIR/Syned/gt_augmented_test_clean.json", 'r') as json_file:
         emu_gt_test = json.load(json_file)
     original_gt={}
     
-    with open("emu_dataset/instructions_with_idx_test_split.txt", 'r') as file:
+    with open("Syned/instructions_with_idx_test_split.txt", 'r') as file:
         for line in file:
             # Remove any trailing newlines or spaces
             idx, instruction = line.strip().split("<INSTRUCT>")
