@@ -208,7 +208,7 @@ class ClevrDC_Dataset(Dataset):
 
         return inputs, captions, idx
 
-class SynedDataset(Dataset):
+class EmuDataset(Dataset):
     def __init__(self, processor, split="train",json_file="your_DIR/emu_dataset/augmented_dataset.json", split_file="your_DIR/emu_dataset/splits.json", 
                  concat_mode='vertical', use_distractors=False):
         with open(json_file, 'r') as file:

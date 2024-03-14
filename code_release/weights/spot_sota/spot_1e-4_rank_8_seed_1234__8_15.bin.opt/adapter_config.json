@@ -1,0 +1,40 @@
+{
+  "auto_mapping": {
+    "base_model_class": "Blip2ForConditionalGeneration",
+    "parent_library": "transformers.models.blip_2.modeling_blip_2"
+  },
+  "base_model_name_or_path": "Salesforce/blip2-opt-2.7b",
+  "bias": "none",
+  "fan_in_fan_out": false,
+  "inference_mode": true,
+  "init_lora_weights": true,
+  "layers_pattern": null,
+  "layers_to_transform": null,
+  "lora_alpha": 16,
+  "lora_dropout": 0.05,
+  "modules_to_save": null,
+  "peft_type": "LORA",
+  "r": 8,
+  "revision": null,
+  "target_modules": [
+    "qformer.encoder.layer.0.crossattention.attention.query",
+    "qformer.encoder.layer.1.crossattention.attention.query",
+    "qformer.encoder.layer.2.crossattention.attention.query",
+    "qformer.encoder.layer.3.crossattention.attention.query",
+    "qformer.encoder.layer.4.crossattention.attention.query",
+    "qformer.encoder.layer.5.crossattention.attention.query",
+    "qformer.encoder.layer.6.crossattention.attention.query",
+    "qformer.encoder.layer.7.crossattention.attention.query",
+    "qformer.encoder.layer.8.crossattention.attention.query",
+    "qformer.encoder.layer.9.crossattention.attention.query",
+    "qformer.encoder.layer.10.crossattention.attention.query",
+    "qformer.encoder.layer.11.crossattention.attention.query",
+    "value",
+    "key",
+    "qkv",
+    "q_proj",
+    "k_proj",
+    "v_proj"
+  ],
+  "task_type": null
+}

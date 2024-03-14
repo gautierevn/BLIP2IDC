@@ -34,13 +34,11 @@ from peft import (
 from utils.eval_utils import *
 import logging
 
-from fixing_metrics import compute_caption_scores
 import json
 import os
 import random
 from collections import defaultdict
 import torch.nn.functional as F
-from datasets
 import numpy as np
 import pandas
 import torch
@@ -443,7 +441,7 @@ def initialize_model_with_lora(args):
         model (VisionEncoderDecoder): The updated VisionEncoderDecoder model.
     """
     print("Model initialized")
-    model = VisionEncoderDecoder(model_type=args.model_type)
+    model = BLIP2IDC(model_type=args.model_type)
 
     modules = args.module_to_ft
     target_modules = []
@@ -618,7 +616,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     parser = argparse.ArgumentParser(description="Vision Encoder-Decoder Model Selection")
     parser.add_argument('--model_type', type=str, default='opt',
-                        help='Type of model to use. Options are: "opt")
+                        help='Type of model to use. Options are: "opt"')
     parser.add_argument('--lora_rank', type=int, default=16,
                         help='rank of the low rank adaptation matrix. Int between 1 to 32')
     parser.add_argument('--ckpt', type=str, default=None,
