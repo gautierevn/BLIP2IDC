@@ -1,4 +1,4 @@
-# ID 9003 
+# [WACV 2025] 
 # Reframing Image Difference Captioning with BLIP2IDC and Synthetic Augmentation
 
 ## Abstract Summary
