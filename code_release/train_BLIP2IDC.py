@@ -60,6 +60,8 @@ from IDC_datasets import ClevrChangeDataset, SpotTheDiff, ImageEditingRequest, C
 global logger
 from torchvision import transforms
 
+MAIN_DIR = "your_dir"
+
 def train(model, dataloader, optimizer, device, args):
     model.main_model.to(device)
     model.main_model.train()
@@ -94,13 +96,13 @@ def main_clevr(args):
     dataset_semantic_change = []
     dataset_no_change = []
     modules_to_save = []
-    best_score_path = "your_DIR/best_Cider_score.txt"
+    best_score_path = f"{MAIN_DIR}/best_Cider_score.txt"
 
     concat_mode = args.concat_mode
     if args.dataset == "clevr":
-        img_dir = "your_DIR/clevr_dataset/data/data/images"
-        sc_dir = "your_DIR/clevr_dataset/data/data/sc_images"
-        nsc_dir = "your_DIR/clevr_dataset/data/data/nsc_images"
+        img_dir = f"{MAIN_DIR}/clevr_dataset/data/data/images"
+        sc_dir = f"{MAIN_DIR}/clevr_dataset/data/data/sc_images"
+        nsc_dir = f"{MAIN_DIR}/clevr_dataset/data/data/nsc_images"
 
         dataset_semantic_change = ClevrChangeDataset(img_dir=img_dir, modified_img_dir=sc_dir,
                                                      processor=model.processor,
@@ -113,7 +115,7 @@ def main_clevr(args):
             concatenated_dataset = ConcatDataset([dataset_semantic_change, dataset_no_change])
         else:
             concatenated_dataset = dataset_semantic_change
-        with open("your_DIR/clevr_dataset/data/data/splits.json", "r") as f:
+        with open(f"{MAIN_DIR}/clevr_dataset/data/data/splits.json", "r") as f:
             split_info = json.load(f)
 
         train_idx = split_info['train']
@@ -154,17 +156,17 @@ def main_clevr(args):
 
     if args.dataset == "spot":
         print("DATASET : SPOT")
-        img_dir = "your_DIR/spot_the_diff/resized_images/original"
-        sc_dir = "your_DIR/spot_the_diff/resized_images/modified"
+        img_dir = f"{MAIN_DIR}/spot_the_diff/resized_images/original"
+        sc_dir = f"{MAIN_DIR}/spot_the_diff/resized_images/modified"
 
         print("ARCHITECTURE : mono")
 
         train_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
-                                label_file="your_DIR/spot_the_diff/reformat_train.json")
+                                label_file=f"{MAIN_DIR}/spot_the_diff/reformat_train.json")
         val_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
-                              label_file="your_DIR/spot_the_diff/reformat_val.json")
+                              label_file=f"{MAIN_DIR}/spot_the_diff/reformat_val.json")
         test_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
-                               label_file="your_DIR/spot_the_diff/reformat_test.json")
+                               label_file=f"{MAIN_DIR}/spot_the_diff/reformat_test.json")
 
         train_loader = DataLoader(train_set, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
                                   num_workers=32,
@@ -179,18 +181,18 @@ def main_clevr(args):
        
     if args.dataset == "IER":
 
-        img_dir = "your_DIR/IER_dataset/images"
+        img_dir = f"{MAIN_DIR}/IER_dataset/images"
 
         train_data_original = ImageEditingRequest(img_dir=img_dir, img_dir_synthetic=img_dir,
                                                   processor=model.processor,
-                                                  label_file="your_DIR/IER_dataset/train.json",
+                                                  label_file=f"{MAIN_DIR}/IER_dataset/train.json",
                                                   concat_mode=concat_mode)
         val_data = ImageEditingRequest(img_dir=img_dir, processor=model.processor,
-                                        label_file="your_DIR/IER_dataset/valid.json",
+                                        label_file=f"{MAIN_DIR}/IER_dataset/valid.json",
                                                 concat_mode=concat_mode)
         
         test_data = ImageEditingRequest(img_dir=img_dir, processor=model.processor,
-                                                label_file="your_DIR/IER_dataset/test.json",
+                                                label_file=f"{MAIN_DIR}/IER_dataset/test.json",
                                                 concat_mode=concat_mode)
         
         train_loader = DataLoader(train_data_original, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
@@ -210,7 +212,7 @@ def main_clevr(args):
     if args.dataset == "DC":
         clevr_dc_dataset = ClevrDC_Dataset(processor=model.processor)
 
-        split_json = "your_DIR/clevr_dc/split_dc.json"
+        split_json = f"{MAIN_DIR}/clevr_dc/split_dc.json"
         with open(split_json, 'r') as file:
             split_info = json.load(file)
 
@@ -261,12 +263,12 @@ def main_clevr(args):
             return torch.stack(double_images), instructions, tasks, idxs
 
         dataset = load_dataset("facebook/emu_edit_test_set_generations",
-                               cache_dir="your_DIR/.cache/huggingface/datasets")
+                               cache_dir=f"{MAIN_DIR}/.cache/huggingface/datasets")
         data = dataset["validation"]
         og_train_data = []
         og_val_data = []
         
-        split_file="your_DIR/emu_dataset/splits.json"
+        split_file=f"{MAIN_DIR}/emu_dataset/splits.json"
         with open(split_file,"r") as file :
             split_data = json.load(file)
         
@@ -325,20 +327,20 @@ def main_clevr(args):
     early_stop = 0
     epochs = 0
     best_val_loss = 100000000000.0
-    logger = get_logger("results/log.txt")
+    logger = get_logger("log.txt")
     best_metrics = []
     try:
-        with open("your_DIR/all_run_scores.json", 'r') as file:
+        with open(f"{MAIN_DIR}/all_run_scores.json", 'r') as file:
             run_scores = json.load(file)
     except FileNotFoundError:
         run_scores = {}
-        with open("your_DIR/all_run_scores.json", 'w') as file:
+        with open(f"{MAIN_DIR}/all_run_scores.json", 'w') as file:
             json.dump(run_scores, file, indent=4)
     if args.little_name not in run_scores.keys():
         run_scores[args.little_name] = {}
         run_scores[args.little_name]["best_cider_score"] = 0.0
         run_scores[args.little_name][
-            "path"] = f"your_DIR/{args.save_dir}/{args.little_name}_{args.lora_rank}.bin.opt"
+            "path"] = f"{MAIN_DIR}/{args.save_dir}/{args.little_name}_{args.lora_rank}.bin.opt"
 
     best_loss = 10.0
     if args.TRAIN == "True":
@@ -360,7 +362,7 @@ def main_clevr(args):
                 
                 best_output_model_file = output_model_file
                 
-                with open("your_DIR/all_run_scores.json", 'w') as file:
+                with open(f"{MAIN_DIR}/all_run_scores.json", 'w') as file:
                     json.dump(run_scores, file, indent=4)
                 
                 logger.info(
@@ -372,39 +374,39 @@ def main_clevr(args):
             if early_stop == 10:
                 break        
 
-        if args.TEST == "True":
-            if args.TRAIN == "True":
-                args.ckpt = run_scores[args.little_name]["path"]
-                print(args.ckpt)
-            model = initialize_model_with_lora(args=args)
-            if args.dataset in ["emu","IER"] :
-                # print("testing task emu")
-                # CIDEr, task_metrics = eval_emu_mono(model.main_model, task_dataloaders=task_dataloaders, device=device,
-                #                                processor=model.processor,
-                #                                args=args)  # , mean_sentence="there is a person walking in the parking lot")
-                # logger.info(f"test scores are {task_metrics}, best CIDEr is {CIDEr}")
-                print("TESTING overall Emu")
-                CIDEr, metrics = eval_epoch(model.main_model, dataloader=test_loader, device=device, epoch="eval",
-                                            logger=logger,
-                                            processor=model.processor,
-                                            args=args)  # , mean_sentence="there is a person walking in the parking lot")
-                run_scores[args.little_name]["best_cider_score"] = CIDEr
-                print(metrics)
-
-                with open("your_DIR/all_run_scores.json", 'w') as file:
-                    json.dump(run_scores, file, indent=4)
-                
-                logger.info(f"test scores are {metrics}, best CIDEr is {CIDEr}")
-                print("Tested")
-            
-        if args.TEST == "True":
-            print("TESTING")
-            CIDEr, metrics = eval_epoch(model.main_model, dataloader=test_loader, device=device, epoch="eval",
-                                        logger=logger,
-                                        processor=model.processor, args=args,
-                                        mean_sentence="the scene remains the same")
-            logger.info(f"test scores are {metrics}, best CIDEr is {CIDEr}")
-            print("Tested")
+            if args.TEST == "True":
+                if args.TRAIN == "True":
+                    args.ckpt = run_scores[args.little_name]["path"]
+                    print(args.ckpt)
+                model = initialize_model_with_lora(args=args)
+                if args.dataset in ["emu","IER","spot"] :
+                    # print("testing task emu")
+                    # CIDEr, task_metrics = eval_emu_mono(model.main_model, task_dataloaders=task_dataloaders, device=device,
+                    #                                processor=model.processor,
+                    #                                args=args)  # , mean_sentence="there is a person walking in the parking lot")
+                    # logger.info(f"test scores are {task_metrics}, best CIDEr is {CIDEr}")
+                    print(f"TESTING overall on {args.dataset}")
+                    CIDEr, metrics = eval_epoch(model.main_model, dataloader=test_loader, device=device, epoch="eval",
+                                                logger=logger,
+                                                processor=model.processor,
+                                                args=args)  # , mean_sentence="there is a person walking in the parking lot")
+                    run_scores[args.little_name]["best_cider_score"] = CIDEr
+                    print(metrics)
+        
+                    with open(f"{MAIN_DIR}/all_run_scores.json", 'w') as file:
+                        json.dump(run_scores, file, indent=4)
+                    
+                    logger.info(f"test scores are {metrics}, best CIDEr is {CIDEr}")
+                    print("Tested")
+        print(args.TEST == "True")
+    if args.TEST == "True":
+        print("TESTING")
+        CIDEr, metrics = eval_epoch(model.main_model, dataloader=test_loader, device=device, epoch="eval",
+                                    logger=logger,
+                                    processor=model.processor, args=args,)
+                                    #mean_sentence="the scene remains the same")
+        logger.info(f"test scores are {metrics}, best CIDEr is {CIDEr}")
+        print("Tested")
     print("END TRAINING")
     return best_score, best_metrics
 
@@ -474,8 +476,18 @@ def initialize_model_with_lora(args):
 
     dir_adapter = args.ckpt
     if dir_adapter is not None:
-        checkpoint_name = f"{dir_adapter}/adapter_model.bin"
-        adapters_weights = torch.load(checkpoint_name)
+        bin_checkpoint_name = f"{dir_adapter}/adapter_model.bin"
+        safetensors_checkpoint_name = f"{dir_adapter}/adapter_model.safetensors"
+        
+        import os
+        from safetensors.torch import load_file
+        
+        if os.path.exists(bin_checkpoint_name):
+            adapters_weights = torch.load(bin_checkpoint_name)
+        elif os.path.exists(safetensors_checkpoint_name):
+            adapters_weights = load_file(safetensors_checkpoint_name)
+        else:
+            raise FileNotFoundError(f"No adapter checkpoint found at {dir_adapter}. Expected either adapter_model.bin or adapter_model.safetensors")
         try:
             cross_attention_layers = f"{dir_adapter}/custom_layers.pth"
             adapters_weights_additionnal = torch.load(cross_attention_layers)
@@ -483,7 +495,7 @@ def initialize_model_with_lora(args):
             print("loaded")
         except Exception as e:
             print(e)
-        print(f"peft weights loaded from {checkpoint_name}")
+        print(f"peft weights loaded from {args.ckpt}")
         set_peft_model_state_dict(model.main_model, adapters_weights)
     print("MODEL INITIALIZED")
     return model
@@ -528,7 +540,7 @@ def custom_collate(batch):
     idi_batch = []
 
     for item in batch:
-        inputs_0, labels, idi,idi = item
+        inputs_0, labels, idi = item
         inputs_0_batch.append(inputs_0[0])
         labels_batch.append(labels)
         idi_batch.append(idi)
