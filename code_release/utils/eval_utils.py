@@ -1,16 +1,18 @@
 import sys
-COCO_PATH = 'your_dir/coco-caption' # i.e. /home/user/code/coco-caption
+COCO_PATH = 'code_release/cococaption'
 sys.path.insert(0, COCO_PATH)
 from cococaption.pycocoevalcap.evil import COCOEvilCap
-
-from pycocoevalcap.eval import COCOEvalCap
-from pycocoevalcap.eval import PTBTokenizer, Bleu, Meteor, Rouge, Cider
+from cococaption.pycocoevalcap.eval import COCOEvalCap
+from cococaption.pycocoevalcap.eval import PTBTokenizer, Bleu, Meteor, Rouge, Cider
 import json
 import copy
 import numpy as np
-
+import torch
 from pycocotools.coco import COCO
-from pycocoevalcap.eval import COCOEvalCap
+import os
+
+from tqdm import tqdm
+MAIN_DIR = "your_dir"
 
 class EvalEvil:
     def __init__(self):
@@ -194,7 +196,7 @@ def add_distractor_type_(type_dict_path):
     # Add the new "distractor" type to the dictionary
     type_dict["distractor"] = distractor_image_ids
     print(len(type_dict.values()))
-    with open("your_DIR/clevr_dataset/data/data/type_mapping_with_distractors.json", 'w') as f:
+    with open(f"{MAIN_DIR}/clevr_dataset/data/data/type_mapping_with_distractors.json", 'w') as f:
         json.dump(type_dict, f, indent=4)
 
 def coco_gt_format_save(gt_file, neg=False):
@@ -392,15 +394,16 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
     change_results_list = []
     no_change_results_list = []
     embeds = []
-    with open("your_DIR/emu_dataset/gt_augmented_test_clean.json", 'r') as json_file:
-        emu_gt_test = json.load(json_file)
-        
-    original_gt={}
-    with open("Syned/instructions_with_idx_test_split.txt", 'r') as file:
-        for line in file:
-            # Remove any trailing newlines or spaces
-            idx, instruction = line.strip().split("<INSTRUCT>")
-            original_gt[idx]=instruction
+    if args.dataset=="emu":
+        with open(f"{MAIN_DIR}/emu_dataset/gt_augmented_test_clean.json", 'r') as json_file:
+            emu_gt_test = json.load(json_file)
+            
+        original_gt={}
+        with open("Syned/instructions_with_idx_test_split.txt", 'r') as file:
+            for line in file:
+                # Remove any trailing newlines or spaces
+                idx, instruction = line.strip().split("<INSTRUCT>")
+                original_gt[idx]=instruction
 
     with torch.no_grad():
         print('using mono architecture for testing')
@@ -429,7 +432,7 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
                 if mean_sentence != None:
                     all_result_lists.append({"caption": mean_sentence, "image_id": id})
                 else:
-                    if args.dataset == "IER" or args.augmentation == "IER" or args.dataset == "emu" or args.dataset == "DC":
+                    if args.dataset == "IER"  or args.dataset == "emu" or args.dataset == "DC":
                         all_result_lists.append(generated_text[c])
                         if args.dataset !="emu":                             
                             gt_list.append(labels[c])
@@ -439,15 +442,15 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
                         all_result_lists.append({"caption": generated_text[c], "image_id": id})
 
     if args.dataset == "clevr":
-        anno_file = "your_DIR/clevr_dataset/data/data/total_change_captions_reformat.json"
+        anno_file = f"{MAIN_DIR}/clevr_dataset/data/data/total_change_captions_reformat.json"
 
 
     if args.dataset == "IER" or args.dataset == "emu" or args.dataset == "DC":
         print(f"evaluating {args.dataset}")
         total_results = all_result_lists
-        json.dump(total_results, open(f"your_DIR/results/results_MB_on_{args.dataset}.json", "w"))
-        dataset = json.load(open("your_DIR/IER_dataset/test.json"))
-        preds = json.load(open(f'your_DIR/results/results_MB_on_{args.dataset}.json'))
+        json.dump(total_results, open(f"{MAIN_DIR}/results/results_MB_on_{args.dataset}.json", "w"))
+        dataset = json.load(open(f"{MAIN_DIR}/IER_dataset/test.json"))
+        preds = json.load(open(f'{MAIN_DIR}/results/results_MB_on_{args.dataset}.json'))
         gts = []
         preds_list = []
         for datum in dataset:
@@ -467,7 +470,7 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
         return metrics["CIDEr"], metrics
         
     if args.dataset == "spot":
-        anno_file = "your_DIR/spot_the_diff/valid_part.json"
+        anno_file = f"{MAIN_DIR}/spot_the_diff/valid_part.json"
         
     # Combine results for metrics calculation
     total_results = all_result_lists
@@ -495,7 +498,7 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
 def eval_emu_mono(model, task_dataloaders, device, processor, args, mean_sentence=None):
     model = model.to(device)
     model.eval()
-    with open("your_DIR/Syned/gt_augmented_test_clean.json", 'r') as json_file:
+    with open(f"{MAIN_DIR}/Syned/gt_augmented_test_clean.json", 'r') as json_file:
         emu_gt_test = json.load(json_file)
     original_gt={}
     
@@ -563,7 +566,7 @@ def eval_emu_mono(model, task_dataloaders, device, processor, args, mean_sentenc
                 gt_list = all_result_lists["gt_list"]
 
                 json.dump(total_results, open(f"results/results_MB_on_{args.dataset}.json", "w"))
-                dataset = json.load(open("your_DIR/IER_dataset/test.json"))
+                dataset = json.load(open(f"{MAIN_DIR}/IER_dataset/test.json"))
                 preds = json.load(open(f'your_DIR/results/results_MB_on_{args.dataset}.json'))
                 gts = []
                 preds_list = []
