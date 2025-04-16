@@ -10,7 +10,8 @@ import numpy as np
 import torch
 from pycocotools.coco import COCO
 import os
-
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 from tqdm import tqdm
 MAIN_DIR = "your_dir"
 
@@ -448,9 +449,9 @@ def eval_epoch(model, dataloader, device, epoch=None, logger=None, processor=Non
     if args.dataset == "IER" or args.dataset == "emu" or args.dataset == "DC":
         print(f"evaluating {args.dataset}")
         total_results = all_result_lists
-        json.dump(total_results, open(f"{MAIN_DIR}/results/results_MB_on_{args.dataset}.json", "w"))
+        json.dump(total_results, open(f"results/results_MB_on_{args.dataset}.json", "w"))
         dataset = json.load(open(f"{MAIN_DIR}/IER_dataset/test.json"))
-        preds = json.load(open(f'{MAIN_DIR}/results/results_MB_on_{args.dataset}.json'))
+        preds = json.load(open(f'results/results_MB_on_{args.dataset}.json'))
         gts = []
         preds_list = []
         for datum in dataset:

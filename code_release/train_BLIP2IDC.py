@@ -33,7 +33,6 @@ from peft import (
 )
 from utils.eval_utils import *
 import logging
-
 import json
 import os
 import random
@@ -59,8 +58,12 @@ from collections import Counter
 from IDC_datasets import ClevrChangeDataset, SpotTheDiff, ImageEditingRequest, ClevrDC_Dataset, EmuDataset
 global logger
 from torchvision import transforms
+import warnings
 
 MAIN_DIR = "your_dir"
+
+# Filter out the specific warning about max_new_tokens and max_length
+warnings.filterwarnings("ignore", message="Both `max_new_tokens` .* and `max_length`.* seem to have been set.*")
 
 def train(model, dataloader, optimizer, device, args):
     model.main_model.to(device)
@@ -75,9 +78,9 @@ def train(model, dataloader, optimizer, device, args):
             
         if args.dataset == "emu":
             selected_labels = labels
-            
+
         input_ids = torch.tensor(
-            [model.tokenizer.encode(pr, add_special_tokens=True, max_length=60, padding='max_length',
+            [model.tokenizer.encode(pr, add_special_tokens=True, max_length=30, padding='max_length',
                                     truncation=True)
              for pr in selected_labels]
         ).cuda()
@@ -159,7 +162,6 @@ def main_clevr(args):
         img_dir = f"{MAIN_DIR}/spot_the_diff/resized_images/original"
         sc_dir = f"{MAIN_DIR}/spot_the_diff/resized_images/modified"
 
-        print("ARCHITECTURE : mono")
 
         train_set = SpotTheDiff(img_dir=img_dir, modified_img_dir=sc_dir, processor=model.processor,
                                 label_file=f"{MAIN_DIR}/spot_the_diff/reformat_train.json")
@@ -177,7 +179,6 @@ def main_clevr(args):
         test_loader = DataLoader(test_set, batch_size=args.batch_size, collate_fn=custom_collate, shuffle=False,
                                  num_workers=32,
                                  pin_memory=True, drop_last=True)
-
        
     if args.dataset == "IER":
 
@@ -252,6 +253,8 @@ def main_clevr(args):
                 double_img = composed_transforms(double_img)
                 # double_img.save("double_image.jpg") #for control purpose
                 task_prompt = "Describe the differences between the two images:"
+                
+                #task_prompt = "Describe the differences between the two images:"
                 inputs = processor(images=double_img, text=task_prompt, return_tensors="pt")["pixel_values"].squeeze(
                     0).half()
                 double_images.append(inputs)
@@ -275,11 +278,13 @@ def main_clevr(args):
         for x in data: 
             if x["idx"] in split_data["train"]:
                 og_train_data.append(x)
+
             if x["idx"] in split_data["validation"]:
                 og_val_data.append(x)
         test_data = dataset["test"]
-        train_data = SynedDataset(processor=model.processor,split="train")
-        val_data = SynedDataset(processor=model.processor,split="validation")
+        
+        # train_data = EmuDataset(processor=model.processor,split="train")
+        # val_data = EmuDataset(processor=model.processor,split="validation")
 
         
         if args.synth_pretraining == "True": #means pretraining has been done on customized synthetic data before
@@ -288,7 +293,7 @@ def main_clevr(args):
             train_loader = DataLoader(og_train_data,batch_size=args.batch_size, collate_fn=custom_collate_emu,
                                       shuffle=True, num_workers=32, pin_memory=True, drop_last=True)
             val_loader   = DataLoader(og_val_data,batch_size=args.batch_size, collate_fn=custom_collate_emu,
-                                      shuffle=True, num_workers=32, pin_memory=True, drop_last=True)
+                                      shuffle=False, num_workers=32, pin_memory=True, drop_last=True)
         else: # you train on your synthetic augmentation data first
             
             train_loader = DataLoader(train_data, batch_size=args.batch_size, collate_fn=custom_collate_emu,
@@ -336,28 +341,30 @@ def main_clevr(args):
         run_scores = {}
         with open(f"{MAIN_DIR}/all_run_scores.json", 'w') as file:
             json.dump(run_scores, file, indent=4)
-    if args.little_name not in run_scores.keys():
+    if f"{args.little_name}_{args.lora_rank}" not in run_scores.keys():
         run_scores[args.little_name] = {}
         run_scores[args.little_name]["best_cider_score"] = 0.0
         run_scores[args.little_name][
-            "path"] = f"{MAIN_DIR}/{args.save_dir}/{args.little_name}_{args.lora_rank}.bin.opt"
+            "path"] = f"{MAIN_DIR}/{args.save_dir}/{args.little_name}_{args.lora_rank}"
 
     best_loss = 10.0
     if args.TRAIN == "True":
         print("Beginning training with validation")
         val_loss = []
+        ep=0
         for epoch in tqdm(range(num_epochs), total=num_epochs, desc=f'epoch {epochs}'):
-            train(model, train_loader, optimizer, device, args)
+            model.main_model.train()
 
+            train(model, train_loader, optimizer, device, args)
+            
             avg_loss = validation(model, dataloader=val_loader, device=device, args=args)
             val_loss.append(avg_loss)
-            print("Validation loss : ", val_loss)
             
        
             if avg_loss < best_loss:
                 early_stop = 0
                 best_loss = avg_loss
-                output_model_file = save_model(epoch, model, save_path=run_scores[args.little_name]["path"],
+                output_model_file = save_model(epoch, model, save_path=run_scores[args.little_name]["path"]+"_"+str(ep)+"_.bin",
                                                logger=logger)
                 
                 best_output_model_file = output_model_file
@@ -370,7 +377,7 @@ def main_clevr(args):
             else : 
                 early_stop += 1
                
-
+            ep+=1
             if early_stop == 10:
                 break        
 
@@ -378,7 +385,7 @@ def main_clevr(args):
                 if args.TRAIN == "True":
                     args.ckpt = run_scores[args.little_name]["path"]
                     print(args.ckpt)
-                model = initialize_model_with_lora(args=args)
+                #model = initialize_model_with_lora(args=args)
                 if args.dataset in ["emu","IER","spot"] :
                     # print("testing task emu")
                     # CIDEr, task_metrics = eval_emu_mono(model.main_model, task_dataloaders=task_dataloaders, device=device,
@@ -423,14 +430,15 @@ class BLIP2IDC(nn.Module):
         if model_type == 'opt':
             print(f"MODEL PATH : {model_path}")
             self.main_model = Blip2ForConditionalGeneration.from_pretrained(
-                model_path, low_cpu_mem_usage=True
+                model_path, low_cpu_mem_usage=True,
+                revision="51572668da0eb669e01a189dc22abe6088589a24",
             ).half().cuda()
-            self.processor = Blip2Processor.from_pretrained(model_path)
+            self.processor = Blip2Processor.from_pretrained(model_path,revision="51572668da0eb669e01a189dc22abe6088589a24")
 
         self.vision_model = self.main_model.vision_model
         self.LM = self.main_model.language_model 
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path,revision="51572668da0eb669e01a189dc22abe6088589a24")
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
 def initialize_model_with_lora(args):
@@ -521,7 +529,7 @@ def validation(model, dataloader, device, args):
 
             # Tokenize and pad the selected labels
             input_ids = torch.tensor(
-                [model.tokenizer.encode(pr, add_special_tokens=True, max_length=60, padding='max_length',
+                [model.tokenizer.encode(pr, add_special_tokens=True, max_length=30, padding='max_length',
                                         truncation=True)
                  for pr in selected_labels]
             ).cuda()
@@ -624,7 +632,7 @@ if __name__ == "__main__":
     seed = 42  
     torch.manual_seed(seed)
     np.random.seed(seed)
-    print("WITH SEED 42")
+    print(f"WITH SEED {seed}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     parser = argparse.ArgumentParser(description="Vision Encoder-Decoder Model Selection")
     parser.add_argument('--model_type', type=str, default='opt',
@@ -649,14 +657,14 @@ if __name__ == "__main__":
                         help=" whether to extract the embeddings from the ViT")
     parser.add_argument("--dataset", type=str,
                         help="clevr, spot, IER, Emu")
-    parser.add_argument("--synth_pretraining", type=str, default=False,
+    parser.add_argument("--synth_pretraining", type=str, default=True,
                         help="do your pretrain is based on synthetic data ?")
     parser.add_argument("--concat_mode", type=str, default="vertical",
                         help="vertical or horizontal concatenation of inputs")
     parser.add_argument("--batch_size", type=int, default=16)
     args = parser.parse_args()
     print(args)
-    tokenizer = AutoTokenizer.from_pretrained("Salesforce/blip2-opt-2.7b")
+    tokenizer = AutoTokenizer.from_pretrained("Salesforce/blip2-opt-2.7b",revision="51572668da0eb669e01a189dc22abe6088589a24")
 
     _, _ = main_clevr(args)
 
