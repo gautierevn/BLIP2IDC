@@ -43,6 +43,19 @@ Then, for evaluation, run the eval script :
 ./test_BLIP2IDC.sh
 ```
 
+## Citation
+ 
+```bibtex
+@article{Evennou2024ReframingID,
+  title={Reframing Image Difference Captioning with BLIP2IDC and Synthetic Augmentation},
+  author={Gautier Evennou and Antoine Chaffin and Vivien Chappelier and Ewa Kijak},
+  journal={2025 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
+  year={2024},
+  pages={1392-1402},
+  url={https://api.semanticscholar.org/CorpusID:274965113}
+}
+```
+
 ### Accessing the Syned Dataset
 Our Syned dataset, designed specifically for IDC, will be released upon publication. Samples can be found in the supplementary section of the paper.
 
