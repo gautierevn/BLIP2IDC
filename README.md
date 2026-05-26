@@ -57,5 +57,4 @@ Then, for evaluation, run the eval script :
 ```
 
 ### Accessing the Syned Dataset
-Our Syned dataset, designed specifically for IDC, will be released upon publication. Samples can be found in the supplementary section of the paper.
-
+See code_release/Syned for more instructions.
